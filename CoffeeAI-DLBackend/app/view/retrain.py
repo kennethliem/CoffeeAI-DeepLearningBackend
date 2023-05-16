@@ -84,8 +84,9 @@ def prepareRetrain():
     if request.method == "POST":
         if request.files.get('datasets'):
             dataset = request.files['datasets']
-            dataset.save(dataset.filename)
-            shutil.move(dataset.filename, 'app/datasets/datasets.zip')
+            file_name = dataset.filename.split("/")[-1]
+            dataset.save(file_name)
+            shutil.move(file_name, 'app/datasets/datasets.zip')
             import zipfile
             with zipfile.ZipFile('app/datasets/datasets.zip', 'r') as zip_ref:
                 zip_ref.extractall('app/datasets/exported')
@@ -93,7 +94,7 @@ def prepareRetrain():
             retrain_thread.start()
 
             data["error"] = False
-            data["message"] = "Retrain model requested" 
+            data["message"] = file_name
         else:
             data["error"] = True
             data["message"] = "Can't get Datasets file" 
