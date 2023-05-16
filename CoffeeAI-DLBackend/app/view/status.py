@@ -14,13 +14,20 @@ def engineCheck():
     }
 
     if os.path.isfile(path_name):
-        data["error"] = True
-        data["status"] = "Online"
-        data["message"] = "Engine Ready"
+        data["error"] = False
 
+        f = open("app/retrainStatus.txt", "r")
+        engStatus = f.read()
+        if engStatus == "Running":
+            data["status"] = "Online"
+            data["message"] = "Engine Ready - Retraining in progress"
+        else:
+            data["status"] = "Online"
+            data["message"] = "Engine Ready"
+            
         return jsonify(data)
     else:
-        data["error"] = True
+        data["error"] = False
         data["status"] = "Offline"
         data["message"] = "Engine Offline"
 

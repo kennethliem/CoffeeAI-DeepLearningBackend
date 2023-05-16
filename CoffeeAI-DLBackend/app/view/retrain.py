@@ -3,40 +3,38 @@ from keras.models import load_model
 from flask import Blueprint, request, jsonify
 import shutil
 import os
+import threading
 import io
 
 retrain = Blueprint("retrain", __name__)
 
 IMAGE_SIZE = (240, 240)
 BATCH_SIZE = 64
-EPOCHS = 100
-SEED = 991
+EPOCHS = 10
+SEED = 991    
 
-@retrain.route("/start", methods=["POST"])
-def modelRetrain():
+def retrainer():
 
-    data = {
-		"error":True,
-		"message": "Error!"
-	}
+    with open('app/retrainStatus.txt', 'w') as file:
+        file.write('Running')
+    file.close
 
-    try:
-        train_dir = 'datasets/exported/train'
-        test_dir = 'datasets/exported/test'
+    train_dir = 'app/datasets/exported/Train'
+    test_dir = 'app/datasets/exported/Test'
         
-        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+    train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
                                                 rescale=1./255,
                                                 zoom_range=0.2,
                                                 horizontal_flip=True
                                             )
         
-        validation_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+    validation_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
                                                 rescale=1./255,
                                                 zoom_range=0.2,
                                                 horizontal_flip=True
                                             )
 
-        train_data = train_datagen.flow_from_directory(train_dir,
+    train_data = train_datagen.flow_from_directory(train_dir,
                                                         target_size=IMAGE_SIZE,
                                                         batch_size=BATCH_SIZE,
                                                         shuffle=True,
@@ -44,7 +42,7 @@ def modelRetrain():
                                                         class_mode='categorical'
                                                     )
 
-        test_data = validation_datagen.flow_from_directory(test_dir,
+    test_data = validation_datagen.flow_from_directory(test_dir,
                                                         target_size=IMAGE_SIZE,
                                                         batch_size=BATCH_SIZE,
                                                         shuffle=True,
@@ -52,57 +50,57 @@ def modelRetrain():
                                                         class_mode='categorical'
                                                     )
         
-        cnn_model = load_model('app/models/model-new.h5')
+    cnn_model = load_model('app/models/model.h5')
 
-        cnn_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
+    cnn_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
                     loss='categorical_crossentropy', 
                     metrics=['accuracy'])
 
-        cnn_model.fit(
+    cnn_model.fit(
             x=train_data,
             epochs=EPOCHS,
             validation_data=test_data,
-        )
+    )
 
-        cnn_model.save('models/new-models-versions.h5')
+    cnn_model.save('app/models/new-models-versions.h5')
+    from datetime import date
+    today = date.today()
 
-        data["error"] = False
-        data["message"] = "Model Succesfully Trained"
-    except:
-        data["error"] = True
-        data["message"] = "Training process error"
+    date = today.strftime("%d-%m-%Y")
+    os.rename('app/models/model.h5', 'app/models/model-old-'+date+'.h5')
+    os.rename('app/models/new-models-versions.h5', 'app/models/model.h5')
 
-    return jsonify(data)
-
-def extractDatasets(path):
-    import zipfile
-    with zipfile.ZipFile(path, 'r') as zip_ref:
-        zip_ref.extractall('datasets/exported')
-    os.remove('datasets/datasets.zip')
-
-    return jsonify()
+    with open('app/retrainStatus.txt', 'w') as file:
+        file.write('Finished')
+    file.close
 
 @retrain.route("/", methods=["POST"])
-def datasets():
+def prepareRetrain():
     data = {
 		"error":True,
 		"message": "Error!"
 	}
-
+    retrain_thread = threading.Thread(target=retrainer, name="Retrainer")
     if request.method == "POST":
         if request.files.get('datasets'):
             dataset = request.files['datasets']
             dataset.save(dataset.filename)
-            shutil.move(dataset.filename, 'datasets/datasets.zip')
-            extractDatasets('datasets/datasets.zip')
+            shutil.move(dataset.filename, 'app/datasets/datasets.zip')
+            import zipfile
+            with zipfile.ZipFile('app/datasets/datasets.zip', 'r') as zip_ref:
+                zip_ref.extractall('app/datasets/exported')
+            os.remove('app/datasets/datasets.zip')
+            retrain_thread.start()
 
             data["error"] = False
-            data["message"] = "Datasets uploaded succesfully" 
+            data["message"] = "Retrain model requested" 
         else:
             data["error"] = True
             data["message"] = "Can't get Datasets file" 
     else:
-        data["error"] = True
-        data["message"] = "Wrong Method"
+        data["error"] = False
+        data["message"] = "Wrong Method"            
+  
 
     return jsonify(data)
+
