@@ -94,7 +94,7 @@ def prepareRetrain():
             retrain_thread.start()
 
             data["error"] = False
-            data["message"] = file_name
+            data["message"] = "Retrain requested successfuly"
         else:
             data["error"] = True
             data["message"] = "Can't get Datasets file" 
